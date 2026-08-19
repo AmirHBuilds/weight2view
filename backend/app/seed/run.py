@@ -62,25 +62,39 @@ def seed_items(db) -> tuple[int, int]:
 
 
 def seed_references(db) -> tuple[int, int]:
-    created, skipped = 0, 0
+    """
+    Creates missing references. For references that already exist (matched
+    by name), syncs their shape/dimensions/volume/familiarity to the seed
+    data - this lets `python -m app.seed.run` pick up shape updates (e.g.
+    the Phase 2.4 stylized models) on an existing database without manual
+    SQL.
+    """
+    created, updated = 0, 0
     for entry in REFERENCES:
         existing = db.query(ReferenceObject).filter(ReferenceObject.name == entry["name"]).first()
         if existing:
-            skipped += 1
+            changed = False
+            for field in ("category", "length_mm", "width_mm", "height_mm", "volume_l", "shape", "familiarity_score"):
+                if getattr(existing, field) != entry[field]:
+                    setattr(existing, field, entry[field])
+                    changed = True
+            if changed:
+                updated += 1
             continue
         db.add(ReferenceObject(**entry))
         created += 1
+
     db.commit()
-    return created, skipped
+    return created, updated
 
 
 def main():
     db = SessionLocal()
     try:
         items_created, items_skipped = seed_items(db)
-        refs_created, refs_skipped = seed_references(db)
+        refs_created, refs_updated = seed_references(db)
         print(f"Items: {items_created} created, {items_skipped} skipped (already existed)")
-        print(f"References: {refs_created} created, {refs_skipped} skipped (already existed)")
+        print(f"References: {refs_created} created, {refs_updated} updated (synced to seed data)")
     finally:
         db.close()
 

@@ -66,6 +66,10 @@ enables it automatically).
 # Migrations
 cd backend && alembic upgrade head
 cd backend && alembic revision --autogenerate -m "description"
+# Note: this repo's history includes migration 0002, which widens the
+# reference_objects.shape check constraint for Phase 2's stylized models
+# (phone, bottle, mug, fridge, etc). Running `alembic upgrade head` picks
+# this up automatically on a fresh or existing database.
 
 # Seed data (idempotent - safe to re-run)
 cd backend && python -m app.seed.run
@@ -94,26 +98,50 @@ cd frontend && npm run build
   `demo` (illustrative bulk densities) or `estimated` (commonly published constants like water's
   density); none are presented as verified scientific data.
 
-## Current limitations
+### Phase 2 additions (visualization upgrade)
 
-- **Admin has no real authentication.** `/admin` is wide open in this build. See the
-  `TODO(auth)` block in `backend/app/api/admin/__init__.py` for the seam where real auth should
-  be plugged in — do not deploy this publicly as-is.
-- **3D shapes are procedural placeholders** (box / rounded box / cylinder), not photorealistic
-  or item-specific. `model_url` exists on `reference_objects` as a seam for real GLTF/GLB assets
-  later.
-- **`unit_count` measurement strategy is not implemented** (only `density` and `bulk_density`).
-  The schema/enum already reserves space for it.
-- **Volume → mass (reverse calculation) is not implemented.** The calculation service's shape
-  (`MeasurementData` in, structured result out) is designed so this can be added alongside the
-  existing function without breaking the API.
+- **Smart camera / Fit to View** (`frontend/src/components/visualization/sceneBounds.ts`,
+  `CameraRig.tsx`): camera framing is computed from the actual bounding box of everything on
+  screen (target + selected references), not a fixed distance — works from millimeter-scale
+  (1kg gold) to building-scale (2000kg of loose material) without breaking OrbitControls.
+  A "Fit to View" button re-triggers framing on demand; framing also re-runs automatically
+  whenever the calculation or reference selection changes.
+- **Dimension visualization**: the target cuboid now shows in-scene bracket-style dimension
+  indicators (`DimensionIndicators.tsx`) plus a homepage panel clearly labeled "Estimated
+  dimensions" with an explicit note that this is a visualization aid, not the item's real shape.
+- **Dimension unit selector** (`frontend/src/lib/units.ts`, `DimensionUnitSelector.tsx`):
+  mm/cm/m/in/ft, pure display-layer conversion with a single source of truth — no recalculation,
+  no duplicated conversion logic.
+- **Stylized reference models** (`frontend/src/components/visualization/models/`): a
+  `renderReferenceModel(shape)` registry maps a DB-backed `shape` field (phone, bottle, mug,
+  shoe, backpack, fridge, washing_machine, car, motorcycle, bicycle, plus generic
+  box/rounded_box/cylinder fallbacks) to small dedicated procedural components built from shared,
+  reused geometries. Backend migration `0002` widens the `reference_objects.shape` check
+  constraint; the seed script now syncs shape updates onto existing rows idempotently.
+- **Multiple reference comparison**: "Compare with" is now a multi-select — toggle any of the
+  top-ranked alternatives and/or add any reference from the full catalog. All selected objects
+  render simultaneously at **true relative scale** (verified: e.g. a 7.2× volume difference
+  between two references renders as an actual ~7.2× size difference, never faked for
+  convenience).
+- **Focus / Show all**: clicking a reference object in the scene focuses the camera on just that
+  object (helpful when comparing something tiny against something huge); "Show all" restores the
+  full framing.
+
+## Known limitations (unchanged from Phase 1, plus one new item)
+
+- **Admin has no real authentication.** See the `TODO(auth)` block in
+  `backend/app/api/admin/__init__.py`.
+- `unit_count` measurement strategy and volume→mass are still not implemented (schema/service
+  shape already reserves space for both).
 - Reference-object volumes for irregular objects (bicycle, motorcycle) are rough bounding-box
-  approximations, not true occupied volume — noted in the seed data comments.
-- No automated frontend tests yet (backend calculation/reference-selection logic has 24 passing
-  unit tests).
+  approximations, not true occupied volume.
+- **New**: with 3+ reference objects compared simultaneously, their floating labels can overlap
+  at the default zoom level. Focus mode (click an object) is the current mitigation; automatic
+  label decluttering is a reasonable follow-up.
+- No automated frontend tests yet. Backend calculation/reference-selection/units logic has 26
+  passing unit tests (24 original + 2 added for the extended length-unit coverage).
 
 ## Recommended next step
 
-Wire up real admin authentication (even a simple shared-secret header would be a meaningful
-improvement over the current open dev route), then expand the seed dataset and start collecting
-real user item requests to prioritize what to research next.
+Wire up real admin authentication, then consider automatic label decluttering for 3+ simultaneous
+reference comparisons (e.g. hide labels for non-focused objects until hovered).

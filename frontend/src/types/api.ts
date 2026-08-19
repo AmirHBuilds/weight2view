@@ -46,7 +46,7 @@ export interface ReferenceObjectRead {
   width_mm: number;
   height_mm: number;
   volume_l: number;
-  shape: "box" | "rounded_box" | "cylinder";
+  shape: "box" | "rounded_box" | "cylinder" | "phone" | "bottle" | "mug" | "shoe" | "backpack" | "fridge" | "washing_machine" | "car" | "motorcycle" | "bicycle";
   model_url: string | null;
   familiarity_score: number;
   active: boolean;

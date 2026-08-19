@@ -10,7 +10,29 @@ from app.database import Base
 # Simple procedural geometry for MVP. `model_url` is reserved so a real
 # GLTF/GLB asset can replace the procedural shape later without a schema
 # change - the frontend just needs to prefer model_url when present.
-REFERENCE_SHAPES = ("box", "rounded_box", "cylinder")
+#
+# Generic fallback shapes: box, rounded_box, cylinder.
+# Stylized recognizable shapes (Phase 2.4): each maps to a dedicated
+# procedural model component in the frontend (see
+# frontend/src/components/visualization/models/registry.ts). Adding a new
+# stylized shape is a two-step process: add the value here (+ migration
+# updating the DB check constraint) and register a model component on the
+# frontend - nothing else needs to change.
+REFERENCE_SHAPES = (
+    "box",
+    "rounded_box",
+    "cylinder",
+    "phone",
+    "bottle",
+    "mug",
+    "shoe",
+    "backpack",
+    "fridge",
+    "washing_machine",
+    "car",
+    "motorcycle",
+    "bicycle",
+)
 
 
 class ReferenceObject(Base):

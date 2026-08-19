@@ -8,9 +8,38 @@ const EMPTY_FORM = {
   length_mm: "",
   width_mm: "",
   height_mm: "",
-  shape: "box" as "box" | "rounded_box" | "cylinder",
+  shape: "box" as
+    | "box"
+    | "rounded_box"
+    | "cylinder"
+    | "phone"
+    | "bottle"
+    | "mug"
+    | "shoe"
+    | "backpack"
+    | "fridge"
+    | "washing_machine"
+    | "car"
+    | "motorcycle"
+    | "bicycle",
   familiarity_score: "5",
 };
+
+const SHAPE_OPTIONS: { value: typeof EMPTY_FORM.shape; label: string }[] = [
+  { value: "box", label: "box (generic)" },
+  { value: "rounded_box", label: "rounded_box (generic)" },
+  { value: "cylinder", label: "cylinder (generic)" },
+  { value: "phone", label: "phone (stylized)" },
+  { value: "bottle", label: "bottle (stylized)" },
+  { value: "mug", label: "mug (stylized)" },
+  { value: "shoe", label: "shoe (stylized)" },
+  { value: "backpack", label: "backpack (stylized)" },
+  { value: "fridge", label: "fridge (stylized)" },
+  { value: "washing_machine", label: "washing_machine (stylized)" },
+  { value: "car", label: "car (stylized)" },
+  { value: "motorcycle", label: "motorcycle (stylized)" },
+  { value: "bicycle", label: "bicycle (stylized)" },
+];
 
 export function AdminReferencesPage() {
   const [refs, setRefs] = useState<ReferenceObjectRead[]>([]);
@@ -87,9 +116,11 @@ export function AdminReferencesPage() {
             </Field>
             <Field label="Shape">
               <select value={form.shape} onChange={(e) => setForm({ ...form, shape: e.target.value as typeof form.shape })} className="input">
-                <option value="box">box</option>
-                <option value="rounded_box">rounded_box</option>
-                <option value="cylinder">cylinder</option>
+                {SHAPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Familiarity (1-10)">

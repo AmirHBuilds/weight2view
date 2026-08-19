@@ -34,6 +34,19 @@ def test_length_to_mm():
     assert length_to_mm(1, "in") == pytest.approx(25.4)
 
 
+def test_length_to_mm_all_units():
+    assert length_to_mm(1, "mm") == 1
+    assert length_to_mm(1, "cm") == 10
+    assert length_to_mm(1, "m") == 1000
+    assert length_to_mm(1, "in") == pytest.approx(25.4)
+    assert length_to_mm(1, "ft") == pytest.approx(304.8)
+
+
+def test_length_to_mm_case_insensitive():
+    assert length_to_mm(1, "CM") == 10
+    assert length_to_mm(1, "Ft") == pytest.approx(304.8)
+
+
 def test_volume_to_liters_and_back():
     liters = volume_to_liters(1, "ft3")
     assert liters == pytest.approx(28.316846592)

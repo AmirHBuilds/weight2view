@@ -27,7 +27,7 @@ class ReferenceObjectWrite(BaseModel):
     length_mm: float = Field(gt=0)
     width_mm: float = Field(gt=0)
     height_mm: float = Field(gt=0)
-    shape: str = Field(default="box", pattern="^(box|rounded_box|cylinder)$")
+    shape: str = Field(default="box", pattern="^(box|rounded_box|cylinder|phone|bottle|mug|shoe|backpack|fridge|washing_machine|car|motorcycle|bicycle)$")
     model_url: str | None = None
     familiarity_score: int = Field(default=5, ge=1, le=10)
     active: bool = True
