@@ -1,0 +1,367 @@
+"""
+Seed item data.
+
+IMPORTANT: Values here are for demo/MVP purposes. Where a value is a
+commonly published physical constant (e.g. density of water, iron, gold)
+it is marked "estimated" with a generic source note. Where a value is an
+illustrative bulk density for a loose/granular material (which varies with
+variety, moisture, and packing), it is marked "demo" and explicitly noted
+as illustrative. NONE of these should be treated as verified scientific
+data - that is the admin's job for real production data.
+"""
+
+ITEMS = [
+    {
+        "name": "White Rice (uncooked)",
+        "category": "grain",
+        "description": "Long-grain white rice, dry and uncooked.",
+        "aliases": ["rice", "white rice", "long grain rice"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 850,
+            "confidence": "demo",
+            "source": "Illustrative typical range for packed dry rice (engineering reference tables).",
+            "notes": "Actual bulk density varies with grain type and settling.",
+        },
+    },
+    {
+        "name": "Wheat Flour",
+        "category": "powder",
+        "description": "All-purpose wheat flour, sifted.",
+        "aliases": ["flour", "all purpose flour", "plain flour"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 593,
+            "confidence": "demo",
+            "source": "Illustrative typical range for sifted flour.",
+            "notes": "Sifted vs packed flour can differ by 20-30%.",
+        },
+    },
+    {
+        "name": "Granulated Sugar",
+        "category": "powder",
+        "description": "White granulated table sugar.",
+        "aliases": ["sugar", "white sugar", "table sugar"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 845,
+            "confidence": "demo",
+            "source": "Illustrative typical range for granulated sugar.",
+        },
+    },
+    {
+        "name": "Table Salt",
+        "category": "powder",
+        "description": "Fine granulated table salt.",
+        "aliases": ["salt", "sea salt", "fine salt"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 1200,
+            "confidence": "demo",
+            "source": "Illustrative typical range for fine salt.",
+        },
+    },
+    {
+        "name": "Sunflower Seeds",
+        "category": "seed",
+        "description": "Hulled sunflower seeds.",
+        "variant": "hulled",
+        "aliases": ["sunflower seed", "تخمه", "تخمه آفتابگردان"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 600,
+            "confidence": "demo",
+            "source": "Illustrative typical range for hulled sunflower seeds.",
+        },
+    },
+    {
+        "name": "Almonds (whole)",
+        "category": "nut",
+        "description": "Whole raw almonds, shelled.",
+        "aliases": ["almond", "almonds"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 480,
+            "confidence": "demo",
+            "source": "Illustrative typical range for whole shelled almonds.",
+        },
+    },
+    {
+        "name": "Peanuts (shelled)",
+        "category": "nut",
+        "description": "Raw shelled peanuts.",
+        "aliases": ["peanut", "peanuts", "groundnuts"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 600,
+            "confidence": "demo",
+            "source": "Illustrative typical range for shelled peanuts.",
+        },
+    },
+    {
+        "name": "Black Beans (dried)",
+        "category": "legume",
+        "description": "Dried black beans.",
+        "aliases": ["black beans", "beans"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 800,
+            "confidence": "demo",
+            "source": "Illustrative typical range for dried beans.",
+        },
+    },
+    {
+        "name": "Lentils (dried)",
+        "category": "legume",
+        "description": "Dried brown lentils.",
+        "aliases": ["lentils", "lentil"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 780,
+            "confidence": "demo",
+            "source": "Illustrative typical range for dried lentils.",
+        },
+    },
+    {
+        "name": "Chickpeas (dried)",
+        "category": "legume",
+        "description": "Dried chickpeas / garbanzo beans.",
+        "aliases": ["chickpeas", "garbanzo beans"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 770,
+            "confidence": "demo",
+            "source": "Illustrative typical range for dried chickpeas.",
+        },
+    },
+    {
+        "name": "Oranges (whole)",
+        "category": "produce",
+        "description": "Whole fresh oranges, as sold loose (includes air gaps between fruit).",
+        "aliases": ["orange", "oranges"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 600,
+            "confidence": "demo",
+            "source": "Illustrative estimate for loosely packed whole citrus.",
+            "notes": "Whole-fruit packing leaves substantial air gaps; this is not fruit-flesh density.",
+        },
+    },
+    {
+        "name": "Apples (whole)",
+        "category": "produce",
+        "description": "Whole fresh apples, as sold loose.",
+        "aliases": ["apple", "apples"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 600,
+            "confidence": "demo",
+            "source": "Illustrative estimate for loosely packed whole fruit.",
+        },
+    },
+    {
+        "name": "Potatoes",
+        "category": "produce",
+        "description": "Whole raw potatoes, as sold loose.",
+        "aliases": ["potato", "potatoes"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 670,
+            "confidence": "demo",
+            "source": "Illustrative estimate for loosely packed potatoes.",
+        },
+    },
+    {
+        "name": "Water",
+        "category": "liquid",
+        "description": "Plain water at room temperature.",
+        "aliases": ["water"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 1000,
+            "confidence": "estimated",
+            "source": "Commonly published physical constant (~1.0 g/mL at room temperature).",
+        },
+    },
+    {
+        "name": "Milk",
+        "category": "liquid",
+        "description": "Whole milk.",
+        "aliases": ["milk", "whole milk"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 1030,
+            "confidence": "estimated",
+            "source": "Commonly published typical density for whole milk.",
+        },
+    },
+    {
+        "name": "Honey",
+        "category": "liquid",
+        "description": "Pure liquid honey.",
+        "aliases": ["honey"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 1420,
+            "confidence": "estimated",
+            "source": "Commonly published typical density for honey.",
+        },
+    },
+    {
+        "name": "Olive Oil",
+        "category": "liquid",
+        "description": "Extra virgin olive oil.",
+        "aliases": ["olive oil"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 915,
+            "confidence": "estimated",
+            "source": "Commonly published typical density for olive oil.",
+        },
+    },
+    {
+        "name": "Ground Coffee",
+        "category": "powder",
+        "description": "Medium-ground roasted coffee.",
+        "aliases": ["coffee", "ground coffee", "coffee grounds"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 336,
+            "confidence": "demo",
+            "source": "Illustrative typical range for ground roasted coffee.",
+        },
+    },
+    {
+        "name": "Coffee Beans (whole)",
+        "category": "seed",
+        "description": "Whole roasted coffee beans.",
+        "aliases": ["coffee beans", "whole bean coffee"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 500,
+            "confidence": "demo",
+            "source": "Illustrative typical range for whole roasted coffee beans.",
+        },
+    },
+    {
+        "name": "Sand (dry)",
+        "category": "material",
+        "description": "Dry construction/play sand.",
+        "aliases": ["sand"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 1600,
+            "confidence": "estimated",
+            "source": "Commonly published typical range for dry sand.",
+        },
+    },
+    {
+        "name": "Iron (solid)",
+        "category": "metal",
+        "description": "Solid cast/wrought iron.",
+        "aliases": ["iron"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 7870,
+            "confidence": "estimated",
+            "source": "Commonly published physical constant for iron.",
+        },
+    },
+    {
+        "name": "Feathers",
+        "category": "material",
+        "description": "Loose down/feather filling, uncompressed.",
+        "aliases": ["feathers", "down feathers"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 35,
+            "confidence": "demo",
+            "source": "Illustrative estimate for loosely packed feathers.",
+            "notes": "Highly compressible; actual volume depends heavily on packing.",
+        },
+    },
+    {
+        "name": "Popcorn Kernels (unpopped)",
+        "category": "seed",
+        "description": "Dry, unpopped popcorn kernels.",
+        "aliases": ["popcorn kernels", "popcorn"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 750,
+            "confidence": "demo",
+            "source": "Illustrative typical range for dry popcorn kernels.",
+        },
+    },
+    {
+        "name": "Rolled Oats",
+        "category": "grain",
+        "description": "Dry rolled oats.",
+        "aliases": ["oats", "rolled oats", "oatmeal"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 410,
+            "confidence": "demo",
+            "source": "Illustrative typical range for rolled oats.",
+        },
+    },
+    {
+        "name": "Cornmeal",
+        "category": "powder",
+        "description": "Dry ground cornmeal.",
+        "aliases": ["cornmeal", "corn flour"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 640,
+            "confidence": "demo",
+            "source": "Illustrative typical range for cornmeal.",
+        },
+    },
+    {
+        "name": "Butter",
+        "category": "dairy",
+        "description": "Solid dairy butter, refrigerated.",
+        "aliases": ["butter"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 911,
+            "confidence": "estimated",
+            "source": "Commonly published typical density for butter.",
+        },
+    },
+    {
+        "name": "Gold (solid)",
+        "category": "metal",
+        "description": "Solid pure gold.",
+        "aliases": ["gold"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 19300,
+            "confidence": "estimated",
+            "source": "Commonly published physical constant for gold.",
+        },
+    },
+    {
+        "name": "Packing Peanuts",
+        "category": "material",
+        "description": "Loose polystyrene packing/void fill.",
+        "aliases": ["packing peanuts", "styrofoam peanuts"],
+        "measurement": {
+            "strategy": "bulk_density",
+            "bulk_density_kg_m3": 16,
+            "confidence": "demo",
+            "source": "Illustrative estimate for loose foam packing material.",
+        },
+    },
+    {
+        "name": "Ice (solid)",
+        "category": "material",
+        "description": "Solid ice (block, not crushed).",
+        "aliases": ["ice"],
+        "measurement": {
+            "strategy": "density",
+            "density_kg_m3": 917,
+            "confidence": "estimated",
+            "source": "Commonly published physical constant for solid ice.",
+        },
+    },
+]

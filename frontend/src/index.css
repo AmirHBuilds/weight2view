@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", "Georgia", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-ink: #12141a;
+  --color-ink-soft: #1b1e26;
+  --color-paper: #efece4;
+  --color-paper-dim: #b9b6ac;
+  --color-teal: #8fd8c7;
+  --color-teal-dim: #5fa696;
+  --color-clay: #c97b5d;
+  --color-line: #2b2e37;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+}
+
+/* Caliper bracket motif: flanks key numeric readouts, echoing the idea of
+   "measuring" something into view. Used sparingly - only for the primary
+   volume result. */
+.caliper {
+  position: relative;
+  padding: 0 0.6em;
+}
+.caliper::before,
+.caliper::after {
+  content: "";
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  background: var(--color-teal-dim);
+}
+.caliper::before { left: 0; }
+.caliper::after { right: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-line);
+  background-color: var(--color-ink);
+  padding: 0.65rem 0.9rem;
+  color: var(--color-paper);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.input:focus {
+  border-color: var(--color-teal-dim);
+}
