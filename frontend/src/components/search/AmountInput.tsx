@@ -20,6 +20,7 @@ export function AmountInput({ amount, unit, onAmountChange, onUnitChange }: Prop
           step="any"
           value={amount}
           onChange={(e) => onAmountChange(Number(e.target.value))}
+          onFocus={(e) => e.target.select()}
           className="w-full rounded-xl border border-line bg-ink-soft px-4 py-3 font-mono text-lg text-paper outline-none transition-colors focus:border-teal-dim"
         />
       </div>

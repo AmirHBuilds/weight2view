@@ -92,6 +92,7 @@ export function HomePage() {
         width_mm: catalogRef.width_mm,
         height_mm: catalogRef.height_mm,
         multiple,
+        modelUrl: catalogRef.model_url,
       });
     }
     return list;

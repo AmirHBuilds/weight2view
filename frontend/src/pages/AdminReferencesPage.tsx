@@ -23,6 +23,8 @@ const EMPTY_FORM = {
     | "motorcycle"
     | "bicycle",
   familiarity_score: "5",
+  model_url: "",
+  model_source: "",
 };
 
 const SHAPE_OPTIONS: { value: typeof EMPTY_FORM.shape; label: string }[] = [
@@ -73,6 +75,8 @@ export function AdminReferencesPage() {
         height_mm: Number(form.height_mm),
         shape: form.shape,
         familiarity_score: Number(form.familiarity_score),
+        model_url: form.model_url.trim() || null,
+        model_source: form.model_source.trim() || null,
         active: true,
       });
       setForm(EMPTY_FORM);
@@ -124,20 +128,43 @@ export function AdminReferencesPage() {
               </select>
             </Field>
             <Field label="Familiarity (1-10)">
-              <input required type="number" min={1} max={10} value={form.familiarity_score} onChange={(e) => setForm({ ...form, familiarity_score: e.target.value })} className="input" />
+              <input required type="number" min={1} max={10} value={form.familiarity_score} onChange={(e) => setForm({ ...form, familiarity_score: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
             </Field>
             <Field label="Length (mm)">
-              <input required type="number" step="any" value={form.length_mm} onChange={(e) => setForm({ ...form, length_mm: e.target.value })} className="input" />
+              <input required type="number" step="any" value={form.length_mm} onChange={(e) => setForm({ ...form, length_mm: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
             </Field>
             <Field label="Width (mm)">
-              <input required type="number" step="any" value={form.width_mm} onChange={(e) => setForm({ ...form, width_mm: e.target.value })} className="input" />
+              <input required type="number" step="any" value={form.width_mm} onChange={(e) => setForm({ ...form, width_mm: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
             </Field>
             <Field label="Height (mm)">
-              <input required type="number" step="any" value={form.height_mm} onChange={(e) => setForm({ ...form, height_mm: e.target.value })} className="input" />
+              <input required type="number" step="any" value={form.height_mm} onChange={(e) => setForm({ ...form, height_mm: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
             </Field>
           </div>
           <p className="text-xs text-paper-dim">
             Volume is derived automatically from length × width × height.
+          </p>
+          <div className="grid grid-cols-2 gap-4 border-t border-line pt-4">
+            <Field label="GLB model URL (optional)">
+              <input
+                value={form.model_url}
+                onChange={(e) => setForm({ ...form, model_url: e.target.value })}
+                className="input"
+                placeholder="/models/refrigerator.glb"
+              />
+            </Field>
+            <Field label="Model source / attribution (optional)">
+              <input
+                value={form.model_source}
+                onChange={(e) => setForm({ ...form, model_source: e.target.value })}
+                className="input"
+                placeholder="e.g. Kenney.nl, CC0"
+              />
+            </Field>
+          </div>
+          <p className="text-xs text-paper-dim">
+            If a GLB URL is set, the app tries to load and normalize it to the physical dimensions
+            above; on any failure it falls back to the stylized "{form.shape}" procedural model
+            automatically — leave blank to always use the procedural model.
           </p>
           <button type="submit" disabled={saving} className="rounded-lg bg-teal px-5 py-2.5 font-medium text-ink hover:opacity-90 disabled:opacity-40">
             {saving ? "Saving…" : "Create reference"}
@@ -156,6 +183,7 @@ export function AdminReferencesPage() {
                 <th className="px-4 py-3 font-mono text-xs uppercase tracking-wide">Category</th>
                 <th className="px-4 py-3 font-mono text-xs uppercase tracking-wide">Volume</th>
                 <th className="px-4 py-3 font-mono text-xs uppercase tracking-wide">Familiarity</th>
+                <th className="px-4 py-3 font-mono text-xs uppercase tracking-wide">Model</th>
                 <th className="px-4 py-3 font-mono text-xs uppercase tracking-wide">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -167,6 +195,15 @@ export function AdminReferencesPage() {
                   <td className="px-4 py-3 text-paper-dim">{r.category}</td>
                   <td className="px-4 py-3 font-mono text-xs text-paper-dim">{r.volume_l.toFixed(2)} L</td>
                   <td className="px-4 py-3 font-mono text-xs text-paper-dim">{r.familiarity_score}/10</td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {r.model_url ? (
+                      <span className="text-teal" title={r.model_source ?? undefined}>
+                        GLB
+                      </span>
+                    ) : (
+                      <span className="text-paper-dim">procedural</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 font-mono text-xs ${r.active ? "text-teal" : "text-paper-dim"}`}>
                       {r.active ? "active" : "inactive"}

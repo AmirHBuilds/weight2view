@@ -48,6 +48,7 @@ export interface ReferenceObjectRead {
   volume_l: number;
   shape: "box" | "rounded_box" | "cylinder" | "phone" | "bottle" | "mug" | "shoe" | "backpack" | "fridge" | "washing_machine" | "car" | "motorcycle" | "bicycle";
   model_url: string | null;
+  model_source: string | null;
   familiarity_score: number;
   active: boolean;
 }

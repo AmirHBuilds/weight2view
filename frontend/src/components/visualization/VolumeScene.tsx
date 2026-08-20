@@ -4,8 +4,8 @@ import { Grid, Html, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { CameraRig } from "./CameraRig";
 import { DimensionIndicators } from "./DimensionIndicators";
-import { renderReferenceModel } from "./models/registry";
-import { layoutRow, unionBox3, boundsToBox3, type SceneObjectBounds } from "./sceneBounds";
+import { ReferenceVisual } from "./models/ReferenceVisual";
+import { layoutRow, unionBox3, type SceneObjectBounds } from "./sceneBounds";
 import { formatMultiple } from "./ReferencePicker";
 import type { LengthUnit } from "../../lib/units";
 
@@ -17,6 +17,8 @@ export interface SceneReference {
   width_mm: number;
   height_mm: number;
   multiple: number; // target_volume / reference_volume
+  /** GLB asset URL for this reference, if one exists (see ReferenceVisual for the GLB-vs-procedural decision). */
+  modelUrl?: string | null;
 }
 
 interface Props {
@@ -35,7 +37,29 @@ function toSceneSize(dims: { length_mm: number; width_mm: number; height_mm: num
   return [dims.length_mm * SCALE, dims.height_mm * SCALE, dims.width_mm * SCALE];
 }
 
-function TargetShape({ size, position }: { size: [number, number, number]; position: [number, number, number] }) {
+/**
+ * The target cuboid AND its dimension indicators are rendered as one unit,
+ * both positioned by the same `position` prop derived from this object's
+ * own layout entry. This is what Phase 2's dimension-indicator bug fix
+ * hinges on: indicators used to be rendered separately at the scene
+ * origin, so when the reference set changed and the row layout re-centered
+ * (shifting the target's X position), the target mesh moved but its
+ * indicators didn't - they'd drift away from the object they describe.
+ * Keeping them in the same positioned group makes that class of bug
+ * impossible: there is exactly one source of truth for "where is the
+ * target", and everything describing the target reads from it.
+ */
+function TargetShape({
+  size,
+  position,
+  dimsMm,
+  unit,
+}: {
+  size: [number, number, number];
+  position: [number, number, number];
+  dimsMm: { length_mm: number; width_mm: number; height_mm: number };
+  unit: LengthUnit;
+}) {
   const [l, h, w] = size;
   const edges = useMemo(() => new THREE.BoxGeometry(l, h, w), [l, w, h]);
   return (
@@ -49,6 +73,7 @@ function TargetShape({ size, position }: { size: [number, number, number]; posit
           <lineBasicMaterial color="#5fa696" />
         </lineSegments>
       </group>
+      <DimensionIndicators l={l} h={h} w={w} dimsMm={dimsMm} unit={unit} />
     </group>
   );
 }
@@ -57,42 +82,17 @@ function ReferenceModel({
   reference,
   size,
   position,
-  focused,
-  dimmed,
-  onFocus,
 }: {
   reference: SceneReference;
   size: [number, number, number];
   position: [number, number, number];
-  focused: boolean;
-  dimmed: boolean;
-  onFocus: () => void;
 }) {
-  const Model = renderReferenceModel(reference.shape);
-  const [l, h] = size;
+  const [l, h, w] = size;
   return (
     <group position={position}>
-      <group
-        onClick={(e) => {
-          e.stopPropagation();
-          onFocus();
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = "auto";
-        }}
-      >
-        <Model l={l} h={h} w={size[2]} color={REFERENCE_COLOR} />
-      </group>
+      <ReferenceVisual modelUrl={reference.modelUrl} shape={reference.shape} l={l} h={h} w={w} color={REFERENCE_COLOR} />
       <Html position={[0, h + Math.max(...size) * 0.12, 0]} center occlude={false}>
-        <div
-          className={`pointer-events-none whitespace-nowrap rounded-md border px-2 py-1 font-mono text-[10px] transition-opacity ${
-            focused ? "border-teal-dim text-teal" : "border-line text-clay/90"
-          } ${dimmed ? "opacity-40" : "opacity-100"} bg-ink-soft/90`}
-        >
+        <div className="pointer-events-none whitespace-nowrap rounded-md border border-line bg-ink-soft/90 px-2 py-1 font-mono text-[10px] text-clay/90">
           {reference.name} · {formatMultiple(reference.multiple)}
         </div>
       </Html>
@@ -102,7 +102,6 @@ function ReferenceModel({
 
 export function VolumeScene({ targetDims, references, dimensionUnit }: Props) {
   const [fitToken, setFitToken] = useState(0);
-  const [focusId, setFocusId] = useState<string | null>(null);
 
   const targetSize = toSceneSize(targetDims);
   const refSizes = references.map((r) => ({
@@ -116,6 +115,10 @@ export function VolumeScene({ targetDims, references, dimensionUnit }: Props) {
     [targetDims.length_mm, targetDims.width_mm, targetDims.height_mm, references.map((r) => r.id).join(",")]
   );
 
+  // Object identity is looked up by id, every render - never by array
+  // index and never cached across composition changes, so a reference
+  // being added/removed can't cause another object to silently inherit
+  // stale bounds.
   const layoutById = new Map<string, SceneObjectBounds>(layout.map((o) => [o.id, o]));
   const targetLayout = layoutById.get(TARGET_ID)!;
 
@@ -125,26 +128,13 @@ export function VolumeScene({ targetDims, references, dimensionUnit }: Props) {
   useEffect(() => {
     if (lastSignature.current !== sceneSignature) {
       lastSignature.current = sceneSignature;
-      setFocusId(null);
       setFitToken((t) => t + 1);
     }
   }, [sceneSignature]);
 
-  const fitBox = useMemo(() => {
-    if (focusId) {
-      const obj = layoutById.get(focusId);
-      if (obj) return boundsToBox3(obj);
-    }
-    return unionBox3(layout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, focusId]);
+  const fitBox = useMemo(() => unionBox3(layout), [layout]);
 
   function handleManualFit() {
-    setFitToken((t) => t + 1);
-  }
-
-  function handleShowAll() {
-    setFocusId(null);
     setFitToken((t) => t + 1);
   }
 
@@ -160,31 +150,16 @@ export function VolumeScene({ targetDims, references, dimensionUnit }: Props) {
           <CameraRig box={fitBox} fitToken={fitToken} />
 
           <Suspense fallback={null}>
-            <TargetShape size={targetSize} position={[targetLayout.x, 0, targetLayout.z]} />
-            <DimensionIndicators
-              l={targetSize[0]}
-              h={targetSize[1]}
-              w={targetSize[2]}
+            <TargetShape
+              size={targetSize}
+              position={[targetLayout.x, 0, targetLayout.z]}
               dimsMm={targetDims}
               unit={dimensionUnit}
             />
             {references.map((r) => {
               const obj = layoutById.get(r.id);
               if (!obj) return null;
-              return (
-                <ReferenceModel
-                  key={r.id}
-                  reference={r}
-                  size={obj.size}
-                  position={[obj.x, 0, obj.z]}
-                  focused={focusId === r.id}
-                  dimmed={focusId !== null && focusId !== r.id}
-                  onFocus={() => {
-                    setFocusId(r.id);
-                    setFitToken((t) => t + 1);
-                  }}
-                />
-              );
+              return <ReferenceModel key={r.id} reference={r} size={obj.size} position={[obj.x, 0, obj.z]} />;
             })}
           </Suspense>
 
@@ -211,15 +186,6 @@ export function VolumeScene({ targetDims, references, dimensionUnit }: Props) {
             >
               ⤢ Fit to view
             </button>
-            {focusId && (
-              <button
-                type="button"
-                onClick={handleShowAll}
-                className="rounded-full border border-teal-dim/50 bg-ink-soft/95 px-3 py-1.5 font-mono text-xs text-teal transition-colors hover:border-teal"
-              >
-                Show all
-              </button>
-            )}
           </div>
         </div>
       </div>

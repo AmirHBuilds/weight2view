@@ -126,11 +126,11 @@ export function AdminItemsPage() {
               </Field>
               {form.strategy === "density" ? (
                 <Field label="Density (kg/m³)">
-                  <input required type="number" step="any" value={form.density_kg_m3} onChange={(e) => setForm({ ...form, density_kg_m3: e.target.value })} className="input" />
+                  <input required type="number" step="any" value={form.density_kg_m3} onChange={(e) => setForm({ ...form, density_kg_m3: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
                 </Field>
               ) : (
                 <Field label="Bulk density (kg/m³)">
-                  <input required type="number" step="any" value={form.bulk_density_kg_m3} onChange={(e) => setForm({ ...form, bulk_density_kg_m3: e.target.value })} className="input" />
+                  <input required type="number" step="any" value={form.bulk_density_kg_m3} onChange={(e) => setForm({ ...form, bulk_density_kg_m3: e.target.value })} onFocus={(e) => e.target.select()} className="input" />
                 </Field>
               )}
               <Field label="Source">

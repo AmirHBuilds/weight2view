@@ -123,11 +123,50 @@ cd frontend && npm run build
   render simultaneously at **true relative scale** (verified: e.g. a 7.2× volume difference
   between two references renders as an actual ~7.2× size difference, never faked for
   convenience).
-- **Focus / Show all**: clicking a reference object in the scene focuses the camera on just that
-  object (helpful when comparing something tiny against something huge); "Show all" restores the
-  full framing.
 
-## Known limitations (unchanged from Phase 1, plus one new item)
+### Phase 3 additions (GLB assets + fixes)
+
+- **GLB reference models**: reference objects can now use a real `.glb` asset
+  (`reference_objects.model_url`) instead of the procedural stand-ins. Architecture:
+  - `frontend/src/components/visualization/models/normalizeModel.ts` — pure function that
+    measures a loaded model's *actual* bounding box (full hierarchy, every mesh/child) and
+    uniformly scales it to fit the database's `length_mm/width_mm/height_mm` ("contain" fit —
+    never distorts proportions; may be conservatively smaller than the target on 1-2 axes if the
+    asset's native proportions don't match).
+  - `models/glbLoader.ts` — a small hand-rolled Suspense-compatible loader (not drei's
+    `useGLTF`) specifically so load *failures* never produce an unhandled promise rejection —
+    see the file header for the full reasoning.
+  - `models/GLBModel.tsx` / `models/ModelErrorBoundary.tsx` / `models/ReferenceVisual.tsx` —
+    `ReferenceVisual` is the single place that decides GLB vs. procedural: no `model_url` →
+    procedural immediately, no network request; `model_url` set → show the procedural model
+    while the GLB loads, permanently fall back to procedural on any failure. GLB and procedural
+    both resolve to an object sized to the same target box, so nothing downstream (layout,
+    camera fit, labels) needs to know which one was used.
+  - Static assets live in `frontend/public/models/` — no object storage/CDN for the MVP.
+  - `reference_objects.model_source` (migration `0003`) tracks attribution/license text per
+    asset, mirroring how `item_measurements.source` tracks provenance for scientific data.
+  - The admin References form has optional "GLB model URL" and "Model source" fields.
+  - `frontend/public/models/Duck.glb` is a real, tested sample asset (Khronos glTF-Sample-Assets,
+    CC0) kept in the repo as a working example — not wired to any reference by default, but
+    useful for verifying the pipeline (`UPDATE reference_objects SET model_url='/models/Duck.glb'
+    WHERE name='...'`) before real assets are sourced.
+- **Dimension-indicator bug fixed**: indicators used to be positioned at a hardcoded scene
+  origin, independent of the target's actual (layout-dependent) position, so toggling references
+  - which re-centers the row layout - could visually detach them from the object they describe.
+  Fixed by making the indicators a child of the *same* positioned group as the target mesh, so
+  there's exactly one source of truth for "where is this object." Verified against reference
+  toggling, multi-reference, disable/re-enable, swap, and rapid-toggle scenarios with zero drift.
+- **Click-to-focus removed**: clicking a reference object no longer moves the camera. OrbitControls
+  (rotate/zoom/pan) are the only way the camera moves during normal interaction; "Fit to View"
+  remains the explicit way to reframe the scene.
+- **Empty search → inline request**: searching for an item that doesn't exist shows "No items
+  found... Request an item →" directly under the search box; one click submits exactly the typed
+  query as an `item_request`, no extra fields asked.
+- **Number input fix**: amount/dimension fields now select their existing text on focus, so
+  clicking in and typing immediately replaces the value instead of inserting alongside it (was
+  producing things like "0200" instead of "200").
+
+## Known limitations
 
 - **Admin has no real authentication.** See the `TODO(auth)` block in
   `backend/app/api/admin/__init__.py`.
@@ -135,9 +174,17 @@ cd frontend && npm run build
   shape already reserves space for both).
 - Reference-object volumes for irregular objects (bicycle, motorcycle) are rough bounding-box
   approximations, not true occupied volume.
-- **New**: with 3+ reference objects compared simultaneously, their floating labels can overlap
-  at the default zoom level. Focus mode (click an object) is the current mitigation; automatic
-  label decluttering is a reasonable follow-up.
+- With 3+ reference objects compared simultaneously, their floating labels can overlap at the
+  default zoom level (click-to-focus was removed per Phase 3 feedback, so this no longer has a
+  dedicated mitigation - "Fit to View" plus manual orbit/zoom is the current workaround; automatic
+  label decluttering is a reasonable follow-up).
+- No real GLB assets are wired up yet - every reference currently renders procedurally
+  (`model_url` is null for all seed data). The loading/normalization/fallback pipeline is fully
+  implemented and was verified end-to-end with real test assets (including a multi-mesh,
+  multi-material asset and a deliberately-broken URL) during development, but shipping with
+  actual car/phone/fridge/etc. models is the next step once assets are sourced.
+- GLB assets are loaded via plain `fetch()` (no Draco/meshopt decompression wired up yet) - fine
+  for small/simple assets, worth adding if real assets turn out to be large.
 - No automated frontend tests yet. Backend calculation/reference-selection/units logic has 26
   passing unit tests (24 original + 2 added for the extended length-unit coverage).
 

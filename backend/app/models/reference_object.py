@@ -50,6 +50,11 @@ class ReferenceObject(Base):
     shape: Mapped[str] = mapped_column(String(20), nullable=False, default="box")
     # Reserved for future real 3D assets; NULL => render procedural `shape`.
     model_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Attribution/license text for the GLB asset (e.g. "Kenney.nl, CC0" or
+    # "Author Name via Sketchfab, CC-BY 4.0"). Free low-poly packs commonly
+    # require attribution even when free to use - tracked the same way
+    # item_measurements tracks `source` for scientific data provenance.
+    model_source: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     familiarity_score: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=5)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
