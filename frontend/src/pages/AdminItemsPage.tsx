@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import type { ItemRead } from "../types/api";
 
 const EMPTY_FORM = {
@@ -19,15 +19,23 @@ const EMPTY_FORM = {
 export function AdminItemsPage() {
   const [items, setItems] = useState<ItemRead[]>([]);
   const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<ItemRead | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      setItems(await api.admin.listItems(q || undefined, true));
+      const all = await api.admin.listItems(q || undefined, true);
+      const filtered =
+        status === "all" ? all : all.filter((i) => (status === "active" ? i.active : !i.active));
+      setItems(filtered);
     } finally {
       setLoading(false);
     }
@@ -36,7 +44,7 @@ export function AdminItemsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, status]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -66,9 +74,30 @@ export function AdminItemsPage() {
     }
   }
 
-  async function handleDeactivate(id: string) {
-    await api.admin.deactivateItem(id);
-    load();
+  async function handleToggleActive(item: ItemRead) {
+    setRowError(null);
+    try {
+      if (item.active) {
+        await api.admin.deactivateItem(item.id);
+      } else {
+        await api.admin.activateItem(item.id);
+      }
+      load();
+    } catch (e) {
+      setRowError(e instanceof ApiError ? e.message : "Failed to update status");
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteError(null);
+    try {
+      await api.admin.deleteItem(deleteTarget.id);
+      setDeleteTarget(null);
+      load();
+    } catch (e) {
+      setDeleteError(e instanceof ApiError ? e.message : "Failed to delete item");
+    }
   }
 
   return (
@@ -148,12 +177,51 @@ export function AdminItemsPage() {
         </form>
       )}
 
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search items…"
-        className="input mb-4"
-      />
+      <div className="mb-4 flex flex-wrap gap-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search items…"
+          className="input max-w-xs"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="input w-36">
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      {rowError && (
+        <p className="mb-4 rounded-lg border border-clay/30 bg-clay/10 px-4 py-3 text-sm text-clay">{rowError}</p>
+      )}
+
+      {deleteTarget && (
+        <div className="mb-4 space-y-3 rounded-xl border border-clay/40 bg-clay/10 p-6">
+          <p className="text-paper">
+            Delete <span className="font-medium">{deleteTarget.name}</span>? This cannot be undone.
+          </p>
+          {deleteError && <p className="text-sm text-clay">{deleteError}</p>}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="rounded-lg bg-clay px-4 py-2 text-sm font-medium text-ink hover:opacity-90"
+            >
+              Yes, delete permanently
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              className="rounded-lg border border-line px-4 py-2 text-sm text-paper-dim hover:text-paper"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-paper-dim">Loading…</p>
@@ -185,11 +253,20 @@ export function AdminItemsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {item.active && (
-                        <button onClick={() => handleDeactivate(item.id)} className="font-mono text-xs text-clay hover:underline">
-                          Deactivate
+                      <div className="flex gap-3">
+                        <button onClick={() => handleToggleActive(item)} className="font-mono text-xs text-paper-dim hover:underline">
+                          {item.active ? "Deactivate" : "Activate"}
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          disabled={item.active}
+                          title={item.active ? "Deactivate before deleting" : undefined}
+                          onClick={() => setDeleteTarget(item)}
+                          className="font-mono text-xs text-clay hover:underline disabled:opacity-30 disabled:no-underline"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

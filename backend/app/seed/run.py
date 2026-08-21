@@ -63,38 +63,38 @@ def seed_items(db) -> tuple[int, int]:
 
 def seed_references(db) -> tuple[int, int]:
     """
-    Creates missing references. For references that already exist (matched
-    by name), syncs their shape/dimensions/volume/familiarity to the seed
-    data - this lets `python -m app.seed.run` pick up shape updates (e.g.
-    the Phase 2.4 stylized models) on an existing database without manual
-    SQL.
+    Creates missing references only - matched by name, exactly like
+    seed_items(). Earlier versions of this script also synced
+    shape/dimensions/etc. onto already-existing rows on every run, which
+    made it unsafe to use once the admin panel could edit those same
+    fields: an admin's manual correction to a reference's dimensions, GLB
+    URL, or active status would silently get overwritten the next time
+    someone ran the seed script. Since the admin panel is now the intended
+    way to manage reference data going forward, this only ever creates
+    rows that don't exist yet and never touches existing ones - a
+    reference, once created (whether by the seed script or an admin), is
+    entirely admin-owned from that point on.
     """
-    created, updated = 0, 0
+    created, skipped = 0, 0
     for entry in REFERENCES:
         existing = db.query(ReferenceObject).filter(ReferenceObject.name == entry["name"]).first()
         if existing:
-            changed = False
-            for field in ("category", "length_mm", "width_mm", "height_mm", "volume_l", "shape", "familiarity_score"):
-                if getattr(existing, field) != entry[field]:
-                    setattr(existing, field, entry[field])
-                    changed = True
-            if changed:
-                updated += 1
+            skipped += 1
             continue
         db.add(ReferenceObject(**entry))
         created += 1
 
     db.commit()
-    return created, updated
+    return created, skipped
 
 
 def main():
     db = SessionLocal()
     try:
         items_created, items_skipped = seed_items(db)
-        refs_created, refs_updated = seed_references(db)
+        refs_created, refs_skipped = seed_references(db)
         print(f"Items: {items_created} created, {items_skipped} skipped (already existed)")
-        print(f"References: {refs_created} created, {refs_updated} updated (synced to seed data)")
+        print(f"References: {refs_created} created, {refs_skipped} skipped (already existed)")
     finally:
         db.close()
 

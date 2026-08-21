@@ -90,5 +90,14 @@ export interface ItemRequestRead {
   updated_at: string;
 }
 
+export interface AdminUserRead {
+  id: string;
+  email: string;
+  role: "admin" | "super_admin";
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
 export const MASS_UNITS = ["mg", "g", "kg", "oz", "lb"] as const;
 export type MassUnit = (typeof MASS_UNITS)[number];

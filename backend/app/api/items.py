@@ -28,6 +28,18 @@ def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    data = ItemRead.model_validate(item)
-    data.aliases = [a.alias for a in item.aliases]
-    return data
+    # See app/api/admin/items.py::_to_read for why aliases are converted
+    # to strings before validation rather than after.
+    return ItemRead.model_validate(
+        {
+            "id": item.id,
+            "name": item.name,
+            "slug": item.slug,
+            "category": item.category,
+            "description": item.description,
+            "variant": item.variant,
+            "active": item.active,
+            "measurements": item.measurements,
+            "aliases": [a.alias for a in item.aliases],
+        }
+    )

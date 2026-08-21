@@ -1,28 +1,67 @@
 """
-Admin API package.
+Admin API package - authentication/authorization dependencies.
 
-TODO(auth): `require_admin` below is a placeholder. It currently allows
-every request through in development mode. Before deploying anywhere
-non-local:
-  1. Replace this with a real dependency (session cookie, JWT, or SSO check).
-  2. Raise HTTPException(401/403) when the caller isn't an authenticated admin.
-  3. Apply it to every router in this package via `dependencies=[Depends(require_admin)]`
-     (already wired up below - only this function's body needs to change).
-  4. Ensure `admin_dev_mode` is forced False outside of `environment=="development"`.
+Replaces the earlier dev-only stub (see project history) with real,
+backend-enforced session authentication. Every admin route depends on
+`AdminAuth` (or `SuperAdminAuth`) via FastAPI's `Depends`, which means
+authorization is checked on every single request regardless of what the
+frontend does or doesn't render - knowing an admin URL is never enough on
+its own to reach admin data.
+
+Session model: an opaque random token lives in an HttpOnly cookie; the
+actual session record (who, expiry) lives server-side in `admin_sessions`.
+Deleting that row (logout, or an admin manually being deactivated) revokes
+access immediately - no JWT-blocklist or waiting-out-an-expiry required.
 """
-from fastapi import Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Response
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import get_db
+from app.models.admin_user import AdminUser
+from app.services.auth import get_session_by_token
+
+_settings = get_settings()
 
 
-def require_admin() -> None:
+def get_current_admin(
+    db: Session = Depends(get_db),
+    token: str | None = Cookie(default=None, alias=_settings.session_cookie_name),
+) -> AdminUser:
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    session = get_session_by_token(db, token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    admin = session.admin_user
+    if not admin.is_active:
+        raise HTTPException(status_code=401, detail="Account is deactivated")
+    return admin
+
+
+def require_super_admin(admin: AdminUser = Depends(get_current_admin)) -> AdminUser:
+    if admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return admin
+
+
+AdminAuth = Depends(get_current_admin)
+SuperAdminAuth = Depends(require_super_admin)
+
+
+def set_session_cookie(response: Response, token: str) -> None:
     settings = get_settings()
-    if settings.environment != "development" and not settings.admin_dev_mode:
-        # Placeholder for real auth failure - replace entirely once real
-        # authentication exists. Today this only blocks accidental
-        # non-development deployment with dev mode off.
-        raise HTTPException(status_code=403, detail="Admin authentication not configured")
-    return None
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        httponly=True,
+        secure=settings.effective_session_cookie_secure,
+        samesite="lax",
+        max_age=settings.session_lifetime_hours * 3600,
+        path="/",
+    )
 
 
-AdminAuth = Depends(require_admin)
+def clear_session_cookie(response: Response) -> None:
+    settings = get_settings()
+    response.delete_cookie(key=settings.session_cookie_name, path="/")

@@ -7,15 +7,32 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.admin import AdminAuth
 from app.database import get_db
 from app.models.item import Item, ItemAlias, ItemMeasurement
+from app.models.item_request import ItemRequest
 from app.schemas.item import ItemCreate, ItemMeasurementWrite, ItemRead, ItemUpdate
 
 router = APIRouter(prefix="/admin/items", tags=["admin:items"], dependencies=[AdminAuth])
 
 
 def _to_read(item: Item) -> ItemRead:
-    data = ItemRead.model_validate(item)
-    data.aliases = [a.alias for a in item.aliases]
-    return data
+    # Build `aliases` as plain strings BEFORE validation rather than after:
+    # ItemRead.model_validate(item) with from_attributes=True reads
+    # item.aliases directly (a list of ItemAlias ORM objects) into a
+    # `list[str]` field, which pydantic rejects outright - it has no way
+    # to know an ItemAlias should become its `.alias` string. Passing a
+    # dict with the conversion already done sidesteps that entirely.
+    return ItemRead.model_validate(
+        {
+            "id": item.id,
+            "name": item.name,
+            "slug": item.slug,
+            "category": item.category,
+            "description": item.description,
+            "variant": item.variant,
+            "active": item.active,
+            "measurements": item.measurements,
+            "aliases": [a.alias for a in item.aliases],
+        }
+    )
 
 
 @router.get("", response_model=list[ItemRead])
@@ -107,6 +124,42 @@ def deactivate_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(item)
     return _to_read(item)
+
+
+@router.post("/{item_id}/activate", response_model=ItemRead)
+def activate_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
+    item = db.query(Item).options(selectinload(Item.measurements), selectinload(Item.aliases)).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    item.active = True
+    db.commit()
+    db.refresh(item)
+    return _to_read(item)
+
+
+@router.delete("/{item_id}", status_code=204)
+def delete_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Hard-deletes an item. Blocked if any item_request has already been
+    resolved to it (item_requests.resulting_item_id is a real FK here,
+    unlike references) or if the item is still active - deactivate first,
+    matching the same two-step safety rule as references.
+    """
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.active:
+        raise HTTPException(status_code=400, detail="Deactivate this item before deleting it.")
+
+    linked_requests = db.query(ItemRequest).filter(ItemRequest.resulting_item_id == item_id).count()
+    if linked_requests:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {linked_requests} item request(s) reference this item.",
+        )
+
+    db.delete(item)
+    db.commit()
 
 
 @router.put("/{item_id}/measurement", response_model=ItemRead)

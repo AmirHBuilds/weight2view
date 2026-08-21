@@ -27,7 +27,11 @@ services:
       APP_NAME: Weight2View API
       ENVIRONMENT: development
       CORS_ORIGINS: http://localhost:5173
-      ADMIN_DEV_MODE: "true"
+      # Bootstrap Super Admin - created idempotently on startup. Change
+      # ADMIN_PASSWORD before running this anywhere but a local machine;
+      # nothing here is a secret you'd want committed for real use.
+      ADMIN_EMAIL: owner@weight2view.io
+      ADMIN_PASSWORD: ChangeMe123!
     ports:
       - "8000:8000"
     volumes:
@@ -39,7 +43,12 @@ services:
     depends_on:
       - backend
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      # Requests are proxied through Vite's dev server (see
+      # frontend/vite.config.ts) rather than called cross-origin directly,
+      # so the admin session cookie works the same way it would behind a
+      # single production reverse proxy. `backend` here is the other
+      # service's name on the compose network.
+      VITE_PROXY_TARGET: http://backend:8000
     ports:
       - "5173:5173"
     volumes:

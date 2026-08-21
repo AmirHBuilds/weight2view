@@ -11,7 +11,10 @@ docker compose up --build
 
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:8000 (docs at http://localhost:8000/docs)
-- Admin panel: http://localhost:5173/admin (dev-only, no auth yet — see Limitations)
+- Admin panel: http://localhost:5173/admin — real authentication now (see below); the bootstrap
+  Super Admin logs in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from the environment
+  (`owner@weight2view.io` / `ChangeMe123!` by default in docker-compose.yml — change this before
+  using anywhere but a local machine)
 
 First time only, run the migration and seed data (in a second terminal, once containers are up):
 
@@ -53,12 +56,29 @@ enables it automatically).
 | `APP_NAME` | `Weight2View API` | |
 | `ENVIRONMENT` | `development` | `development` \| `production` |
 | `CORS_ORIGINS` | `http://localhost:5173` | comma-separated |
-| `ADMIN_DEV_MODE` | `true` | see Limitations — admin has no real auth yet |
+| `ADMIN_EMAIL` | *(unset)* | Bootstrap Super Admin email. Idempotent — created once on startup if it doesn't already exist. Unset = no bootstrap account is created. |
+| `ADMIN_PASSWORD` | *(unset)* | Bootstrap Super Admin password. Never logged or returned by any API. |
+| `SESSION_COOKIE_NAME` | `w2v_admin_session` | HttpOnly cookie name for the admin session |
+| `SESSION_LIFETIME_HOURS` | `168` (7 days) | How long a session stays valid |
+| `SESSION_COOKIE_SECURE` | `false` | Forced to `true` automatically when `ENVIRONMENT=production` regardless of this setting |
 
 **frontend/.env**
-| Variable | Default |
-|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8000` |
+| Variable | Default | Notes |
+|---|---|---|
+| `VITE_API_BASE_URL` | *(empty — same-origin)* | Only set this to call a backend directly cross-origin; leaving it empty routes requests through Vite's dev proxy (see "Why a dev proxy?" below) |
+| `VITE_PROXY_TARGET` | `http://localhost:8000` | Where the dev proxy forwards requests. docker-compose sets this to `http://backend:8000` |
+
+### Why a dev proxy?
+
+The admin session is an HttpOnly cookie. The frontend (`:5173`) and backend (`:8000`) run on
+different ports, which browsers treat as different origins — a cookie set cross-origin needs
+`SameSite=None; Secure`, which requires HTTPS and isn't practical for local HTTP dev. Instead,
+`frontend/vite.config.ts` proxies API requests to the backend so every request is same-origin
+from the browser's point of view, and a normal `SameSite=Lax` cookie works exactly as it would
+behind one reverse proxy in production. One wrinkle: `/admin/items`, `/admin/references`, etc.
+are used as **both** frontend page routes and backend API paths, so the proxy only forwards
+requests that don't send `Accept: text/html` (i.e. actual `fetch()` calls, not page loads) —
+see the `apiOnlyBypass` function in `vite.config.ts`.
 
 ## Common commands
 
@@ -66,15 +86,21 @@ enables it automatically).
 # Migrations
 cd backend && alembic upgrade head
 cd backend && alembic revision --autogenerate -m "description"
-# Note: this repo's history includes migration 0002, which widens the
-# reference_objects.shape check constraint for Phase 2's stylized models
-# (phone, bottle, mug, fridge, etc). Running `alembic upgrade head` picks
-# this up automatically on a fresh or existing database.
+# Migration history: 0002 widens reference_objects.shape for stylized
+# models; 0003 adds model_source; 0004 adds admin_users/admin_sessions.
+# `alembic upgrade head` picks all of these up automatically.
 
-# Seed data (idempotent - safe to re-run)
+# Seed data (idempotent - only ever creates missing rows, never edits
+# existing ones - see "Seed safety" below)
 cd backend && python -m app.seed.run
 
-# Tests (calculation + reference-selection services, no DB required)
+# Backend tests. The pure unit tests (calculation/units/reference-selection)
+# need no DB. The auth/authorization/CRUD integration tests need a real
+# Postgres test database - one-time setup:
+#   createdb weight2view_test   (or: psql -c "CREATE DATABASE weight2view_test")
+#   psql -d weight2view_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+#   DATABASE_URL=postgresql+psycopg2://weight2view:weight2view@localhost:5432/weight2view_test \
+#     alembic upgrade head
 cd backend && PYTHONPATH=. pytest tests/ -v
 
 # Frontend build
@@ -166,18 +192,58 @@ cd frontend && npm run build
   clicking in and typing immediately replaces the value instead of inserting alongside it (was
   producing things like "0200" instead of "200").
 
+### Phase 4 additions (real authentication + admin panel upgrade)
+
+- **Real, backend-enforced authentication**: `admin_users` + `admin_sessions` tables (migration
+  `0004`), bcrypt password hashing, opaque server-side session tokens in an HttpOnly cookie —
+  not a JWT, specifically so logout / deactivation can revoke access immediately by deleting the
+  session row, rather than waiting out an expiry or maintaining a blocklist. Every single admin
+  API route depends on `AdminAuth` or `SuperAdminAuth` (`app/api/admin/__init__.py`) — knowing
+  an admin URL is never sufficient; the backend checks the session on every request regardless
+  of what the frontend renders. Verified live and in tests: 401 with no cookie, 200 with a valid
+  one, 401 again immediately after logout.
+- **Roles**: `admin` and `super_admin`. Only super admins can reach `/admin/admins` (both the
+  page and the underlying API) — enforced by `SuperAdminAuth`, not by hiding a nav link.
+- **Super Admin bootstrap**: idempotent — reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` on every startup,
+  creates the account only if it doesn't exist yet. Never hardcoded, never logged, never
+  returned by any API response.
+- **Admin management** (`/admin/admins`, super admin only): create admins, change role,
+  activate/deactivate, reset password. Guards prevent demoting/deactivating your own account or
+  the last remaining active super admin — verified in tests, including the specific case of one
+  super admin demoting a second one down to exactly one remaining, then confirming the last one
+  is protected.
+- **References page rewrite**: grouped edit form (Basic Information / Physical Dimensions /
+  Visualization / Comparison / Status), search + category + status filtering, sort, a live 3D
+  preview in the edit form using the *exact same* GLB/procedural pipeline as the public app (so
+  "looks right in the preview" reliably means "looks right in the app"), and safe two-step
+  delete (an active reference must be deactivated first — deletion is blocked with a 400
+  otherwise; deactivated references stay visible in Admin but are excluded from both the public
+  reference picker and the reference-selection algorithm).
+- **Items page**: added the same activate/deactivate/delete pattern, with delete additionally
+  blocked if any `item_request` still resolves to that item (a real FK, checked before allowing
+  deletion).
+- **Seed safety fix**: `seed_references` no longer syncs/overwrites fields on existing rows on
+  every run (an earlier phase's convenience feature) — it now only ever creates rows that don't
+  exist yet, exactly like `seed_items` already did. A reference, once created by either the seed
+  script or an admin, is fully admin-owned from that point on; re-running the seed script can
+  never silently undo an admin's edit.
+- **Login UX**: `/admin/login`, redirects unauthenticated visitors from any `/admin/*` route;
+  the layout's account area shows email + role and a working logout. No fake "forgot password" —
+  the login page explicitly points to super-admin-driven password reset instead.
+- **A real pre-existing bug was found and fixed along the way** (unrelated to auth): `GET
+  /admin/items` and `GET /items/{id}` both 500'd for any item that had aliases — pydantic was
+  trying to validate raw `ItemAlias` ORM objects directly as strings. Fixed in both places by
+  converting aliases to plain strings before validation instead of after.
+
 ## Known limitations
 
-- **Admin has no real authentication.** See the `TODO(auth)` block in
-  `backend/app/api/admin/__init__.py`.
 - `unit_count` measurement strategy and volume→mass are still not implemented (schema/service
   shape already reserves space for both).
 - Reference-object volumes for irregular objects (bicycle, motorcycle) are rough bounding-box
   approximations, not true occupied volume.
 - With 3+ reference objects compared simultaneously, their floating labels can overlap at the
-  default zoom level (click-to-focus was removed per Phase 3 feedback, so this no longer has a
-  dedicated mitigation - "Fit to View" plus manual orbit/zoom is the current workaround; automatic
-  label decluttering is a reasonable follow-up).
+  default zoom level. "Fit to View" plus manual orbit/zoom is the current workaround; automatic
+  label decluttering is a reasonable follow-up.
 - No real GLB assets are wired up yet - every reference currently renders procedurally
   (`model_url` is null for all seed data). The loading/normalization/fallback pipeline is fully
   implemented and was verified end-to-end with real test assets (including a multi-mesh,
@@ -185,10 +251,24 @@ cd frontend && npm run build
   actual car/phone/fridge/etc. models is the next step once assets are sourced.
 - GLB assets are loaded via plain `fetch()` (no Draco/meshopt decompression wired up yet) - fine
   for small/simple assets, worth adding if real assets turn out to be large.
-- No automated frontend tests yet. Backend calculation/reference-selection/units logic has 26
-  passing unit tests (24 original + 2 added for the extended length-unit coverage).
+- Only one role tier is fully differentiated today (`admin` vs `super_admin`, where `admin`
+  currently has the same item/reference/request permissions as `super_admin` - only
+  `/admin/admins` is actually role-gated). The architecture (a `role` string checked by
+  dependency, not hardcoded per-route logic) is ready for finer-grained permissions later without
+  a rewrite, but that differentiation itself doesn't exist yet.
+- Session cookies rely on the Vite dev proxy for same-origin behavior locally and in
+  docker-compose (see "Why a dev proxy?" above). A real production deployment behind a single
+  reverse-proxy domain wouldn't need this - the proxy is a local/compose-specific detail, not
+  something that ships to production as-is.
+- No password reset email flow (deliberately out of scope per the spec - resets are a
+  super-admin action via `/admin/admins`).
+- No automated frontend tests yet. Backend has 50 passing tests: 26 pure unit tests (no DB) plus
+  24 integration tests (auth, authorization, admin management, reference CRUD safety) against a
+  real Postgres test database.
 
 ## Recommended next step
 
-Wire up real admin authentication, then consider automatic label decluttering for 3+ simultaneous
-reference comparisons (e.g. hide labels for non-focused objects until hovered).
+Source real GLB assets (the loading/normalization pipeline is fully built and tested — see
+Phase 3) for the highest-value reference objects (car, phone, fridge, shoe), and consider
+differentiating `admin` vs `super_admin` permissions beyond just admin-management access if
+that distinction ends up mattering in practice.
