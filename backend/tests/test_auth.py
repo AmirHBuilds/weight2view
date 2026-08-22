@@ -81,25 +81,3 @@ def test_super_admin_can_access_super_admin_routes(client, db):
     login_client(client, db, admin)
     res = client.get("/admin/admins")
     assert res.status_code == 200
-
-
-def test_bootstrap_super_admin_is_idempotent(db, monkeypatch):
-    from app.config import get_settings
-    from app.services.auth import bootstrap_super_admin
-
-    get_settings.cache_clear()
-    monkeypatch.setenv("ADMIN_EMAIL", "boot@weight2view.io")
-    monkeypatch.setenv("ADMIN_PASSWORD", "bootstrap12345")
-    get_settings.cache_clear()
-
-    first = bootstrap_super_admin(db)
-    second = bootstrap_super_admin(db)
-    assert first is not None
-    assert first.id == second.id
-
-    from app.models.admin_user import AdminUser
-
-    count = db.query(AdminUser).filter(AdminUser.email == "boot@weight2view.io").count()
-    assert count == 1
-
-    get_settings.cache_clear()

@@ -21,19 +21,34 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Idempotently ensures the bootstrap Super Admin (ADMIN_EMAIL /
-    # ADMIN_PASSWORD) exists. Safe to run on every startup - see
-    # app/services/auth.py:bootstrap_super_admin for why this never
-    # creates duplicates or resets an already-changed password.
+    # Never creates a fallback/default account - see
+    # app/services/auth.py:bootstrap_super_admin for the exact rules
+    # (no credentials -> skip; only one of the two set -> skip; an existing
+    # super admin under a different email -> skip, never a second one).
+    # Passwords are never logged, in any branch below.
     db = SessionLocal()
     try:
-        admin = bootstrap_super_admin(db)
-        if admin:
-            logger.info("Bootstrap super admin ready: %s", admin.email)
-        elif not settings.admin_email or not settings.admin_password:
+        result = bootstrap_super_admin(db)
+        if result.status == "created":
+            logger.info("Bootstrap super admin created: %s", result.admin.email)
+        elif result.status == "existing":
+            logger.info("Bootstrap super admin already exists: %s", result.admin.email)
+        elif result.status == "skipped_already_exists":
+            logger.warning(
+                "ADMIN_EMAIL does not match any existing account, but a super admin already "
+                "exists under a different email - skipping bootstrap to avoid creating a second "
+                "privileged account. Manage admins via the Admin Panel instead."
+            )
+        elif result.status == "skipped_partial_credentials":
+            logger.warning(
+                "Only one of ADMIN_EMAIL / ADMIN_PASSWORD is set - both are required to "
+                "bootstrap a super admin. No account was created."
+            )
+        else:  # skipped_no_credentials
             logger.warning(
                 "ADMIN_EMAIL / ADMIN_PASSWORD not set - no bootstrap super admin was created. "
-                "Set both in the environment to create one, or create an admin manually."
+                "There is no default account. Set both in the environment to create one, or "
+                "create an admin manually."
             )
     finally:
         db.close()

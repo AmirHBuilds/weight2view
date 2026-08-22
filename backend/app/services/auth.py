@@ -5,6 +5,7 @@ from the startup bootstrap hook, admin-management endpoints, and tests
 without pulling in request/response concerns.
 """
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -14,6 +15,25 @@ from app.config import get_settings
 from app.models.admin_user import AdminSession, AdminUser
 
 SESSION_TOKEN_BYTES = 32  # 256 bits of entropy, URL-safe encoded
+
+
+@dataclass(frozen=True)
+class BootstrapResult:
+    """
+    Outcome of bootstrap_super_admin(), for the caller (the startup hook in
+    app/main.py, or tests) to log/assert on without re-deriving why nothing
+    happened.
+
+    status is one of:
+        "created"                    - a new super admin was created
+        "existing"                   - the configured email already existed; untouched
+        "skipped_no_credentials"     - neither ADMIN_EMAIL nor ADMIN_PASSWORD set
+        "skipped_partial_credentials"- only one of the two set
+        "skipped_already_exists"     - a different super admin already exists
+    """
+
+    status: str
+    admin: AdminUser | None = None
 
 
 def hash_password(password: str) -> str:
@@ -69,29 +89,57 @@ def delete_session_by_token(db: Session, token: str) -> None:
     db.commit()
 
 
-def bootstrap_super_admin(db: Session) -> AdminUser | None:
+def bootstrap_super_admin(db: Session) -> "BootstrapResult":
     """
-    Idempotently ensures the bootstrap Super Admin (from ADMIN_EMAIL /
-    ADMIN_PASSWORD) exists. Safe to call on every startup: does nothing if
-    an account with that email already exists, so re-running the app never
-    creates duplicates or resets a since-changed password.
+    Ensures the bootstrap Super Admin exists, using ADMIN_EMAIL /
+    ADMIN_PASSWORD strictly as *initial* credentials - not as an ongoing
+    source of truth. Safe to call on every startup. Specifically:
+
+    - No credentials configured -> does nothing. There is NO fallback
+      account and NO default credentials; an app with no ADMIN_EMAIL/
+      ADMIN_PASSWORD simply starts with zero admin users until one is
+      created some other way (direct DB insert, or via an existing super
+      admin once one exists).
+    - Only one of the two configured -> does nothing (a partial
+      configuration is treated as "not configured", not "use blank / a
+      default for the missing half").
+    - An account with the configured email already exists -> returned
+      as-is. Its password is NEVER touched here, so an admin who changed
+      their password through the Admin Panel keeps that password across
+      restarts even if ADMIN_PASSWORD in .env is unchanged (or is now
+      stale/different).
+    - No account with that email, but a super admin already exists under
+      a *different* email -> does nothing. Changing ADMIN_EMAIL after the
+      fact must never silently mint a second privileged account; account
+      management from that point on happens through the Admin Panel.
+    - No account with that email, and no super admin exists at all -> the
+      one case that actually creates an account.
     """
     settings = get_settings()
-    if not settings.admin_email or not settings.admin_password:
-        return None
+    email = (settings.admin_email or "").strip()
+    password = settings.admin_password or ""
 
-    email = settings.admin_email.lower().strip()
-    existing = db.query(AdminUser).filter(AdminUser.email == email).first()
-    if existing:
-        return existing
+    if not email and not password:
+        return BootstrapResult(status="skipped_no_credentials")
+    if not email or not password:
+        return BootstrapResult(status="skipped_partial_credentials")
+
+    email = email.lower()
+    existing_by_email = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if existing_by_email:
+        return BootstrapResult(status="existing", admin=existing_by_email)
+
+    any_super_admin = db.query(AdminUser).filter(AdminUser.role == "super_admin").first()
+    if any_super_admin:
+        return BootstrapResult(status="skipped_already_exists")
 
     user = AdminUser(
         email=email,
-        password_hash=hash_password(settings.admin_password),
+        password_hash=hash_password(password),
         role="super_admin",
         is_active=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return BootstrapResult(status="created", admin=user)

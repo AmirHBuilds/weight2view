@@ -27,11 +27,17 @@ services:
       APP_NAME: Weight2View API
       ENVIRONMENT: development
       CORS_ORIGINS: http://localhost:5173
-      # Bootstrap Super Admin - created idempotently on startup. Change
-      # ADMIN_PASSWORD before running this anywhere but a local machine;
-      # nothing here is a secret you'd want committed for real use.
-      ADMIN_EMAIL: owner@weight2view.io
-      ADMIN_PASSWORD: ChangeMe123!
+      # Bootstrap Super Admin - read from the root .env file next to this
+      # docker-compose.yml (NOT backend/.env, which docker compose does
+      # not load automatically). There is no default here - if the root
+      # .env doesn't define these, both resolve to an empty string, and
+      # the app starts with no admin account and a clear startup log
+      # message rather than falling back to any built-in credentials. See
+      # README.md "Admin bootstrap" for the full semantics (idempotent,
+      # never overwrites an existing account's password, never creates a
+      # second super admin).
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "8000:8000"
     volumes:

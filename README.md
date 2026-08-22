@@ -5,16 +5,26 @@ calculated volume rendered in 3D next to a familiar object ("about the size of a
 
 ## Quick start (Docker Compose)
 
+First, create a root `.env` (next to this file and `docker-compose.yml`) with your own Super
+Admin credentials — copy `.env.example` and fill it in:
+
+```bash
+cp .env.example .env
+# then edit .env and set ADMIN_EMAIL / ADMIN_PASSWORD to real values of your choosing
+```
+
+There are no default credentials anywhere in this repo. If you skip this step, the app still
+starts fine — it just won't have any admin account until you create one (see "Admin bootstrap"
+below).
+
 ```bash
 docker compose up --build
 ```
 
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:8000 (docs at http://localhost:8000/docs)
-- Admin panel: http://localhost:5173/admin — real authentication now (see below); the bootstrap
-  Super Admin logs in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from the environment
-  (`owner@weight2view.io` / `ChangeMe123!` by default in docker-compose.yml — change this before
-  using anywhere but a local machine)
+- Admin panel: http://localhost:5173/admin — log in with whatever you set `ADMIN_EMAIL` /
+  `ADMIN_PASSWORD` to in your root `.env`
 
 First time only, run the migration and seed data (in a second terminal, once containers are up):
 
@@ -56,17 +66,53 @@ enables it automatically).
 | `APP_NAME` | `Weight2View API` | |
 | `ENVIRONMENT` | `development` | `development` \| `production` |
 | `CORS_ORIGINS` | `http://localhost:5173` | comma-separated |
-| `ADMIN_EMAIL` | *(unset)* | Bootstrap Super Admin email. Idempotent — created once on startup if it doesn't already exist. Unset = no bootstrap account is created. |
-| `ADMIN_PASSWORD` | *(unset)* | Bootstrap Super Admin password. Never logged or returned by any API. |
+| `ADMIN_EMAIL` | *(unset — no default)* | Bootstrap Super Admin email. See "Admin bootstrap" below. |
+| `ADMIN_PASSWORD` | *(unset — no default)* | Bootstrap Super Admin password. Never logged or returned by any API. |
 | `SESSION_COOKIE_NAME` | `w2v_admin_session` | HttpOnly cookie name for the admin session |
 | `SESSION_LIFETIME_HOURS` | `168` (7 days) | How long a session stays valid |
 | `SESSION_COOKIE_SECURE` | `false` | Forced to `true` automatically when `ENVIRONMENT=production` regardless of this setting |
+
+**root .env** (docker-compose only — see `.env.example` at the repo root)
+| Variable | Default | Notes |
+|---|---|---|
+| `ADMIN_EMAIL` | *(unset — no default)* | Same meaning as `backend/.env`'s, but this is the file docker-compose actually reads for the `backend` container — see "Admin bootstrap" below for why these are two separate files. |
+| `ADMIN_PASSWORD` | *(unset — no default)* | |
 
 **frontend/.env**
 | Variable | Default | Notes |
 |---|---|---|
 | `VITE_API_BASE_URL` | *(empty — same-origin)* | Only set this to call a backend directly cross-origin; leaving it empty routes requests through Vite's dev proxy (see "Why a dev proxy?" below) |
 | `VITE_PROXY_TARGET` | `http://localhost:8000` | Where the dev proxy forwards requests. docker-compose sets this to `http://backend:8000` |
+
+## Admin bootstrap
+
+There are **no default admin credentials** anywhere in this repository — not in `docker-compose.yml`,
+not in source code, not in `.env.example`, not in test fixtures used by any production code path.
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` are read fresh on every startup and treated strictly as *initial*
+bootstrap values, never as an ongoing source of truth:
+
+- **No Super Admin exists yet, and both variables are set** → exactly one Super Admin is created
+  with that email/password.
+- **Only one of the two is set** → bootstrap is skipped entirely (a partial configuration is
+  never treated as "use a default for the missing half"). A clear warning is logged; the
+  password itself is never logged, in any case below.
+- **Neither is set** → bootstrap is skipped. The app starts normally with zero admin accounts.
+- **A Super Admin with the configured email already exists** → nothing happens. In particular,
+  its password is **never** touched here — if that admin has since changed their password
+  through the Admin Panel, restarting the app (with the same, now-stale, `ADMIN_PASSWORD` still
+  sitting in `.env`) does not reset it. Verified live: bootstrap → change password via
+  `/admin/admins/{id}/reset-password` → restart with the original `.env` unchanged → the old
+  bootstrap password is rejected, the changed password still works.
+- **A Super Admin exists under a *different* email than the configured `ADMIN_EMAIL`** → nothing
+  happens. Changing `ADMIN_EMAIL` after initial setup does not rename or replace the existing
+  account, and does not create a second one — a clear warning is logged instead. From that point
+  on, admin accounts are managed through the Admin Panel (`/admin/admins`), not `.env`.
+
+**Where docker-compose reads credentials from**: a root `.env` file, next to `docker-compose.yml`
+(see `.env.example` at the repo root) — *not* `backend/.env`. Docker Compose does not
+automatically load `backend/.env`; it only auto-loads a file named exactly `.env` in the same
+directory as the compose file itself, used for `${VAR}` interpolation in `docker-compose.yml`.
+`backend/.env` is only read when running the backend directly with `uvicorn` outside Docker.
 
 ### Why a dev proxy?
 
@@ -204,9 +250,11 @@ cd frontend && npm run build
   one, 401 again immediately after logout.
 - **Roles**: `admin` and `super_admin`. Only super admins can reach `/admin/admins` (both the
   page and the underlying API) — enforced by `SuperAdminAuth`, not by hiding a nav link.
-- **Super Admin bootstrap**: idempotent — reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` on every startup,
-  creates the account only if it doesn't exist yet. Never hardcoded, never logged, never
-  returned by any API response.
+- **Super Admin bootstrap**: no default/fallback credentials anywhere — see the dedicated
+  "Admin bootstrap" section above for the full semantics (only fires on a database with zero
+  super admins; never overwrites an existing account's password; never creates a second super
+  admin if `ADMIN_EMAIL` changes). Credentials are never hardcoded, never logged, never returned
+  by any API response.
 - **Admin management** (`/admin/admins`, super admin only): create admins, change role,
   activate/deactivate, reset password. Guards prevent demoting/deactivating your own account or
   the last remaining active super admin — verified in tests, including the specific case of one
@@ -235,6 +283,25 @@ cd frontend && npm run build
   trying to validate raw `ItemAlias` ORM objects directly as strings. Fixed in both places by
   converting aliases to plain strings before validation instead of after.
 
+### Phase 5 additions (bootstrap credential hardening)
+
+- **Removed hardcoded Super Admin credentials from `docker-compose.yml`.** It previously set
+  `ADMIN_EMAIL`/`ADMIN_PASSWORD` directly, which silently overrode anything in `backend/.env`
+  (docker-compose env vars always win over a container's own `.env` file). Now reads
+  `${ADMIN_EMAIL:-}` / `${ADMIN_PASSWORD:-}` from a root `.env` instead — see "Admin bootstrap"
+  above for the full read-order explanation and `.env.example` at the repo root.
+- **Bootstrap semantics tightened**: previously, bootstrap only checked whether an account with
+  the *configured email* existed. Now it checks whether *any* super admin exists at all before
+  creating one — so changing `ADMIN_EMAIL` after initial setup can never result in a second
+  privileged account. `bootstrap_super_admin` returns an explicit result status (`created` /
+  `existing` / `skipped_no_credentials` / `skipped_partial_credentials` /
+  `skipped_already_exists`) rather than just an admin-or-None, so the startup log always says
+  exactly which of those five things happened — never the password.
+- All six required scenarios (fresh DB + valid credentials; restart; missing credentials; only
+  one of the two set; a different existing super admin; a manually-changed password surviving
+  restart) have dedicated tests in `tests/test_bootstrap.py`, and were additionally verified live
+  against the real running app and a real Postgres database — not just in the test suite.
+
 ## Known limitations
 
 - `unit_count` measurement strategy and volume→mass are still not implemented (schema/service
@@ -262,8 +329,9 @@ cd frontend && npm run build
   something that ships to production as-is.
 - No password reset email flow (deliberately out of scope per the spec - resets are a
   super-admin action via `/admin/admins`).
-- No automated frontend tests yet. Backend has 50 passing tests: 26 pure unit tests (no DB) plus
-  24 integration tests (auth, authorization, admin management, reference CRUD safety) against a
+- No automated frontend tests yet. Backend has 57 passing tests: 26 pure unit tests (no DB) plus
+  31 integration tests (auth, authorization, admin management, admin bootstrap credential
+  handling, reference CRUD safety) against a
   real Postgres test database.
 
 ## Recommended next step
